@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { ref, get } from "firebase/database";
 import * as XLSX from "xlsx";
+import { ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 
 type Summary = {
   fileName: string;
@@ -111,6 +112,40 @@ function AnalysisContent() {
     setTimeout(() => setToast({show: false, message: ''}), 3000);
   };
 
+  const handleDownloadFileExcel = (summary: Summary) => {
+    const data = [
+      ["File", summary.fileName],
+      ["Profit %", `${summary.totalProfitPct.toFixed(2)}%`],
+      ["Loss %", `${summary.totalLossPct.toFixed(2)}%`],
+      ["Net P&L %", `${summary.netPnLPct.toFixed(2)}%`],
+      ["Win Rate %", `${summary.winRate.toFixed(2)}%`],
+      [],
+      ["Strategy P&L - Date Order"],
+      ["#", "Date", "P&L %", "Result"],
+      ...analysis.selectedDates.map((date: string, idx: number) => {
+        const pnl = summary.byDate?.[date] || 0;
+        return [
+          idx + 1,
+          date,
+          `${pnl.toFixed(2)}%`,
+          pnl > 0 ? 'Profit' : pnl < 0 ? 'Loss' : 'No Trade'
+        ];
+      })
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 15 }, { wch: 70 }, { wch: 12 }, { wch: 12 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Strategy P&L");
+    
+    const cleanFileName = summary.fileName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+    XLSX.writeFile(wb, `${cleanFileName}.xlsx`);
+    
+    setToast({show: true, message: `✓ Downloaded ${cleanFileName}.xlsx`});
+    setTimeout(() => setToast({show: false, message: ''}), 3000);
+  };
+
   if (loading) return <div className="p-8">Loading analysis...</div>;
   if (!analysis) return <div className="p-8">Analysis not found</div>;
 
@@ -209,14 +244,25 @@ function AnalysisContent() {
                   <td className="p-4">{s.winRate.toFixed(2)}%</td>
                   
                   <td className="p-4">
-                    {s.byDate && Object.keys(s.byDate).length > 0 && (
-                      <button
-                        onClick={() => setExpandedRow(expandedRow === s.fileName ? null : s.fileName)}
-                        className="text-gray-600 hover:text-gray-800 transition"
-                      >
-                        {expandedRow === s.fileName ? '▼' : '▶'}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {s.byDate && Object.keys(s.byDate).length > 0 && (
+                        <>
+                          <button
+                            onClick={() => setExpandedRow(expandedRow === s.fileName ? null : s.fileName)}
+                            className="text-gray-600 hover:text-gray-800 transition"
+                          >
+                            {expandedRow === s.fileName ? '▼' : '▶'}
+                          </button>
+                          <button
+                            onClick={() => handleDownloadFileExcel(s)}
+                            className="text-green-600 hover:text-green-700 transition"
+                            title="Download Excel"
+                          >
+                            <ArrowDownTrayIcon className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 {expandedRow === s.fileName && s.byDate && Object.keys(s.byDate).length > 0 && (
